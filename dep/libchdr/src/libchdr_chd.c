@@ -57,6 +57,24 @@
 #endif
 #include <zlib.h>
 
+#ifdef __LIBRETRO__
+#include <streams/file_stream.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+RFILE* rfopen(const char *path, const char *mode);
+extern int64_t rfseek(RFILE* stream, int64_t offset, int origin);
+extern int64_t rftell(RFILE* stream);
+extern int64_t rfread(void* buffer,
+   size_t elem_size, size_t elem_count, RFILE* stream);
+extern int rfclose(RFILE* stream);
+
+#ifdef __cplusplus
+}
+#endif
+
 #undef TRUE
 #undef FALSE
 #define TRUE 1
@@ -918,7 +936,7 @@ static chd_error huff_codec_decompress(void *codec, const uint8_t *src, uint32_t
 	free(bitbuf);
 	return result;
 }
- 
+
 /***************************************************************************
  *  CD FLAC DECOMPRESSOR
  ***************************************************************************
@@ -1117,7 +1135,7 @@ static void zstd_codec_free(void* codec)
 }
 
 /*-------------------------------------------------
- *  decompress - decompress data using the ZSTD 
+ *  decompress - decompress data using the ZSTD
  *  codec
  *-------------------------------------------------
  */
@@ -1127,7 +1145,7 @@ static chd_error zstd_codec_decompress(void* codec, const uint8_t *src, uint32_t
 	zstd_codec_data* zstd_codec = (zstd_codec_data*) codec;
 	//reset decompressor
 	size_t zstd_res =  ZSTD_initDStream(zstd_codec->dstream);
-	if (ZSTD_isError(zstd_res)) 
+	if (ZSTD_isError(zstd_res))
 	{
 		printf("INITI DSTREAM FAILED!\n");
 		return CHDERR_DECOMPRESSION_ERROR;
@@ -1389,7 +1407,7 @@ static const codec_interface codec_interfaces[] =
 		cdzs_codec_decompress,
 		NULL
 	}
-	
+
 };
 
 /***************************************************************************
@@ -1828,7 +1846,12 @@ static inline void map_extract_old(const uint8_t *base, map_entry *entry, uint32
     chd_open_file - open a CHD file for access
 -------------------------------------------------*/
 
-CHD_EXPORT chd_error chd_open_file(FILE *file, int mode, chd_file *parent, chd_file **chd) {
+CHD_EXPORT chd_error chd_open_file(void *data, int mode, chd_file *parent, chd_file **chd) {
+#ifdef __LIBRETRO__
+	RFILE *file    = (RFILE*)data;
+#else
+	FILE *file     = (FILE*)data;
+#endif
 	core_file *stream = malloc(sizeof(core_file));
 	if (!stream)
 		return CHDERR_OUT_OF_MEMORY;
@@ -3413,7 +3436,10 @@ static core_file *core_stdio_fopen(char const *path) {
 	getting file size with stdio
 -------------------------------------------------*/
 static uint64_t core_stdio_fsize(core_file *file) {
-#if defined USE_LIBRETRO_VFS
+#if defined(__LIBRETRO__)
+	#define core_stdio_fseek_impl rfseek
+	#define core_stdio_ftell_impl rftell
+#elif defined USE_LIBRETRO_VFS
 	#define core_stdio_fseek_impl fseek
 	#define core_stdio_ftell_impl ftell
 #elif defined(__WIN32__) || defined(_WIN32) || defined(WIN32) || defined(__WIN64__)
@@ -3429,7 +3455,11 @@ static uint64_t core_stdio_fsize(core_file *file) {
 	#define core_stdio_fseek_impl fseeko
 	#define core_stdio_ftell_impl ftello
 #endif
-	FILE *fp;
+#ifdef __LIBRETRO__
+	RFILE *fp = (RFILE*)file->argp;
+#else
+	FILE *fp = (FILE*)file->argp;
+#endif
 	uint64_t p, rv;
 	fp = (FILE*)file->argp;
 
@@ -3444,14 +3474,22 @@ static uint64_t core_stdio_fsize(core_file *file) {
 	core_stdio_fread - core_file wrapper over fread
 -------------------------------------------------*/
 static size_t core_stdio_fread(void *ptr, size_t size, size_t nmemb, core_file *file) {
+#ifdef __LIBRETRO__
+	return rfread(ptr, size, nmemb, (RFILE*)file->argp);
+#else
 	return fread(ptr, size, nmemb, (FILE*)file->argp);
+#endif
 }
 
 /*-------------------------------------------------
 	core_stdio_fclose - core_file wrapper over fclose
 -------------------------------------------------*/
 static int core_stdio_fclose(core_file *file) {
+#ifdef __LIBRETRO__
+	int err = rfclose((RFILE*)file->argp);
+#else
 	int err = fclose((FILE*)file->argp);
+#endif
 	if (err == 0)
 		free(file);
 	return err;
@@ -3471,5 +3509,9 @@ static int core_stdio_fclose_nonowner(core_file *file) {
 	core_stdio_fseek - core_file wrapper over fclose
 -------------------------------------------------*/
 static int core_stdio_fseek(core_file* file, int64_t offset, int whence) {
+#ifdef __LIBRETRO__
+	return core_stdio_fseek_impl((RFILE*)file->argp, offset, whence);
+#else
 	return core_stdio_fseek_impl((FILE*)file->argp, offset, whence);
+#endif
 }
