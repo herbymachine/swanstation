@@ -75,6 +75,8 @@ extern int rfclose(RFILE* stream);
 }
 #endif
 
+#endif
+
 #undef TRUE
 #undef FALSE
 #define TRUE 1
