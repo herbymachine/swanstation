@@ -3457,14 +3457,12 @@ static uint64_t core_stdio_fsize(core_file *file) {
 	#define core_stdio_fseek_impl fseeko
 	#define core_stdio_ftell_impl ftello
 #endif
+    uint64_t p, rv;
 #ifdef __LIBRETRO__
 	RFILE *fp = (RFILE*)file->argp;
 #else
 	FILE *fp = (FILE*)file->argp;
 #endif
-	uint64_t p, rv;
-	fp = (FILE*)file->argp;
-
 	p = core_stdio_ftell_impl(fp);
 	core_stdio_fseek_impl(fp, 0, SEEK_END);
 	rv = core_stdio_ftell_impl(fp);
